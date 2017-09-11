@@ -1,0 +1,102 @@
+<project name="semconcor" default="all" basedir=".">
+  <property environment="env"/>
+  <property name="compiler.debug" value="on"/>
+  <property name="app.name" value="short-answer"/>
+  <property name="sigmakee.home" value="${env.SIGMA_SRC}" />
+  <property name="sigmanlp.home" value="${env.SIGMA_SRC}/../sigmanlp" />
+  <property name="tomcat.home" value="${env.CATALINA_HOME}"/>
+  <property name="deploy.home" value="${tomcat.home}/webapps/${app.name}"/>
+  <property name="build.classes" value="${basedir}/build/classes"/>
+  <property name="build.lib" value="${basedir}/build/lib"/>
+  <property name="deploy.classes" value="${deploy.home}/WEB-INF/classes"/>
+  <property name="deploy.lib" value="${deploy.home}/WEB-INF/lib"/>
+  <property name="dist.home" value="${tomcat.home}/webapps"/>
+  <property name="dist.war" value="semconcor.war"/>
+ 
+  <path id="output.classpath">
+    <pathelement location="${output}"/>
+     <fileset dir="${build.lib}">
+        <include name="*.jar"/>
+    </fileset>
+  </path>
+  
+  <path id="compile.classpath">
+    <fileset dir="${basedir}/lib">
+        <include name="*.jar"/>
+    </fileset>
+  </path>
+
+  <path id="sourcepath">
+    <dirset dir="${basedir}">
+      <include name="src"/>
+    </dirset>
+  </path>
+ 
+  <target name="init">
+    <echo message="SIGMA_HOME is set to = ${env.SIGMA_HOME}"/>
+    <echo message="sigmakee is set to = ${env.SIGMA_SRC}"/>
+    <echo message="basedir is set to = ${basedir}"/>
+    <echo>sigmakee home: ${sigmakee.home}</echo>
+    <ant antfile="../sigmakee/build.xml" inheritAll="false" target="all" />
+    <ant antfile="../sigmanlp/build.xml" inheritAll="false" target="all" />
+    <copy todir="${basedir}/lib" file="${sigmakee.home}/build/sigmakee.jar" />
+    <copy todir="${basedir}/lib" file="${sigmanlp.home}/build/sigmanlp.jar" />
+  </target>
+  
+  <target name="compile" depends="init" description="Compile semconcor">
+    <mkdir dir="${build.classes}"/>
+    <javac destdir="${build.classes}" debug="on" optimize="on" deprecation="on" classpathref="compile.classpath" fork="true">
+      <src refid="sourcepath"/>
+    </javac>
+    
+    <copy todir="${build.classes}">
+      <fileset dir="${basedir}/src">
+        <include name="*.class"/>
+      </fileset>
+    </copy>
+
+    <copy todir="${build.lib}">
+      <fileset dir="${basedir}/lib" />
+    </copy>
+  </target>
+  
+  <target name="clean" description="cleanup module">
+    <delete dir="${build.classes}"/>
+    <delete dir="${build.lib}"/>
+  </target>
+
+  <target name="web_deploy" depends="compile" description="deploy code to semconcor.war">
+    <!-- Make the root. -->
+    <mkdir dir="${deploy.home}"/>
+
+    <!-- Delete the old code -->
+    <delete includeemptydirs="true" failonerror="false">
+      <fileset dir="${deploy.home}"/>
+      <fileset dir="${tomcat.home}/work/Catalina/localhost/${app.name}"/>
+    </delete>
+
+    <copy todir="${deploy.home}/lib">
+      <fileset file="${basedir}/lib/*.jar" />
+    </copy>
+
+    <!-- Create WEB-INF/classes/ and copy all the loose classes to it. -->
+    <mkdir dir="${deploy.classes}"/>
+    <copy todir="${deploy.classes}">
+      <fileset dir="${build.classes}"/>
+    </copy>
+
+    <!-- Create WEB-INF/lib/ and copy over the needed jar files. -->
+    <mkdir dir="${deploy.lib}"/>
+    <copy todir="${deploy.lib}">
+      <fileset dir="${basedir}/lib" />
+    </copy>
+  </target>
+
+
+  <target name="all" depends="clean, init, compile" description="build all">
+    <tstamp>
+        <format property="TODAY_US" pattern="yyyy-MM-dd HH:mm:ss:sss zzz" locale="en,US"/>
+    </tstamp>
+    <echo>the system date/time is ${TODAY_US}</echo>
+  </target>
+</project>
