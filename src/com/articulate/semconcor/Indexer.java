@@ -1,12 +1,17 @@
 package com.articulate.semconcor;
 
 import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import com.articulate.nlp.TFIDF;
+import com.articulate.nlp.corpora.OntoNotes;
 import com.articulate.nlp.pipeline.Pipeline;
 import com.articulate.nlp.pipeline.SentenceUtil;
 import com.articulate.nlp.semRewrite.CNF;
@@ -101,10 +106,11 @@ public class Indexer {
         try {
             String str = "insert into index (token,file,sentnum,linenum) values ";
             Statement stmt = conn.createStatement();
-            stmt.execute(str + "('" + tok.originalText() + "', '" +
+            String token = tok.originalText();
+            token = token.replaceAll("'","''");
+            stmt.execute(str + "('" + token + "', '" +
                     file + "', '" + sentnum + "', '" + linenum + "');");
-
-            storeCount(conn, tok.originalText());
+            storeCount(conn, token);
         }
         catch(Exception e) {
             System.out.println(e.getMessage());
@@ -120,6 +126,7 @@ public class Indexer {
         try {
             String str = "insert into depindex (token,file,sentnum,linenum) values ";
             Statement stmt = conn.createStatement();
+            token = token.replaceAll("'","''");
             stmt.execute(str + "('" + token + "', '" +
                     file + "', '" + sentnum + "', '" + linenum + "');");
             storeCount(conn, token);
@@ -131,56 +138,22 @@ public class Indexer {
     }
 
     /****************************************************************
-     * Take one line of plan text, parse it into dependencies and add
-     * indexes for the raw tokens and the tokens in the dependency parse
-     * into the database. The DB tables are
-     * content - the sentence and its dependency parse
-     * index - tokens and the sentences in which they are found
-     * depindex - tokens and the dependencies in which they are found
-     * counts - the number of occurrences of a token, used to order joins
      */
-    public static void extractOneLine(Connection conn, String line, Pipeline p, int limit, String file, int linenum) {
+    public static boolean trapNumberHack(String s) {
 
-        Annotation wholeDocument = new Annotation(line);
-        try {
-            p.pipeline.annotate(wholeDocument);
-        }
-        catch (Exception e) {
-            System.out.println("Error in Indexer.extractOneLine(): " + e.getMessage());
-            e.printStackTrace();
-            return;
-        }
-        List<CoreMap> sentences = wholeDocument.get(CoreAnnotations.SentencesAnnotation.class);
-        int sentnum = 0;
-        for (CoreMap sentence : sentences) {
-            sentnum++;
-            List<CoreLabel> tokens = sentence.get(CoreAnnotations.TokensAnnotation.class);
-            if (tokens.size() > 2 && tokens.size() < limit &&
-                    initialCapital(tokens) && endPunctuation(tokens)) {
-                List<String> dependenciesList = SentenceUtil.toDependenciesList(sentence);
-                try {
-                    String str = "insert into content (cont,dependency,file,sentnum,linenum) values ";
-                    Statement stmt = conn.createStatement();
-                    stmt.execute(str + "('" + sentence.toString() + "', '" +
-                            dependenciesList.toString() + "', '" + file + "', '" +
-                            sentnum + "', '" + linenum + "');");
+        Pattern p = Pattern.compile("(\\d,\\d\\d\\d[^\\d])");
+        Matcher m = p.matcher(s);
+        if (m.find())
+            return true;
+        else
+            return false;
+    }
 
-                    for (CoreLabel tok : tokens)
-                        storeSentenceToken(conn,file,sentnum,linenum,tok);
+    /****************************************************************
+     */
+    public static String removeBrackets(String s) {
 
-                    for (String s : dependenciesList) {
-                        Literal l = new Literal(s);
-                        storeDependency(conn,file,sentnum,linenum,l.arg1);
-                        storeDependency(conn,file,sentnum,linenum,l.arg2);
-                        storeDependency(conn,file,sentnum,linenum,l.pred);
-                    }
-                }
-                catch(Exception e) {
-                    System.out.println(e.getMessage());
-                    e.printStackTrace();
-                }
-            }
-        }
+         return s.replaceAll("(\\[|\\]|\\(|\\)|\\{|\\})","");
     }
 
     /****************************************************************
@@ -197,6 +170,9 @@ public class Indexer {
                                              int limit, String file, int linenum) {
 
 
+        if (trapNumberHack(line))
+            return;
+        line = removeBrackets(line);
         System.out.println("extractOneAugmentLine(): " + line);
         List<CoreMap> sentences = null;
         try {
@@ -222,8 +198,12 @@ public class Indexer {
                 try {
                     String str = "insert into content (cont,dependency,file,sentnum,linenum) values ";
                     Statement stmt = conn.createStatement();
-                    str = str + "('" + sentence.toString() + "', '" +
-                            dependenciesList.toString() + "', '" + file + "', '" +
+                    String sent = sentence.toString();
+                    sent = sent.replaceAll("'","''");
+                    String dep = dependenciesList.toString();
+                    dep = dep.replaceAll("'","''");
+                    str = str + "('" + sent + "', '" +
+                            dep + "', '" + file + "', '" +
                             sentnum + "', '" + linenum + "');";
                     stmt.execute(str);
                     System.out.println("extractOneAugmentLine(): " + str);
@@ -247,12 +227,48 @@ public class Indexer {
     }
 
     /****************************************************************
+     */
+    public static void storeCorpusText(Connection conn) {
+
+        Interpreter interp = new Interpreter();
+        KBmanager.getMgr().initializeOnce();
+        try {
+            interp.initialize();
+        }
+        catch (Exception e) {
+            System.out.println("Error in Indexer.storeWikiText(): " + e.getMessage());
+            e.printStackTrace();
+            return;
+        }
+        try {
+            String corporaDir = System.getenv("CORPORA");
+            String dir = corporaDir + File.separator + "transJudge";
+            Files.walk(Paths.get(dir)).forEach(filePath -> {
+                if (Files.isRegularFile(filePath) &&
+                        filePath.toString().endsWith(".txt")) {
+                    ArrayList<String> doc = OntoNotes.readFile(filePath.toString());
+                    System.out.println("storeCorpusText(): " + filePath.toString());
+                    for (int i = 0; i < doc.size(); i++) {
+                        String line = doc.get(i);
+                        if (line.matches("\\d*[\\.\\)] .*"))
+                            extractOneAugmentLine(interp,conn,line,tokensMax,filePath.getFileName().toString(),i);
+                    }
+                }
+            });
+        }
+        catch(Exception e) {
+            System.out.println(e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /****************************************************************
      * http://www.evanjones.ca/software/wikipedia2text.html
      * http://www.evanjones.ca/software/wikipedia2text-extracted.txt.bz2 plain text of 10M words
      */
     public static void storeWikiText(Connection conn) {
 
-        int maxSent = 10;
+        int maxSent = 1000;
         Interpreter interp = new Interpreter();
         KBmanager.getMgr().initializeOnce();
         try {
@@ -347,10 +363,16 @@ public class Indexer {
      */
     public static void main(String[] args) throws Exception {
 
+        System.out.println("Semantic Concordancer Indexing - commands:");
+        System.out.println("    -keep    - doesn't clear db");
+        System.out.println();
         Class.forName("org.h2.Driver");
         Connection conn = DriverManager.getConnection("jdbc:h2:~/test", "sa", "");
-        clearDB(conn);
-        storeWikiText(conn);
+        if (args == null || (args != null && args.length > 0 && args[0] != "-keep")) {
+            clearDB(conn);
+            System.out.println("cleared db");
+        }
+        storeCorpusText(conn);
         conn.close();
     }
 }
