@@ -14,14 +14,15 @@ import java.util.*;
 public class Searcher {
 
     /***************************************************************
+     * @param keys a set of keys of the form filename#sentencenum#linenum
      */
-    public static void fetchResultStrings(Connection conn, HashSet<String> result,
+    public static void fetchResultStrings(Connection conn, HashSet<String> keys,
                                                      ArrayList<String> sentences,
                                                      ArrayList<String> dependencies) {
 
         Statement stmt = null;
         try {
-            for (String s : result) {
+            for (String s : keys) {
                 String[] sar = s.split("#");
                 String query = "select cont,dependency from content where file='" + sar[0] +
                         "' and sentnum=" + sar[1] + " and linenum=" + sar[2] + ";";
@@ -40,12 +41,18 @@ public class Searcher {
     }
 
     /***************************************************************
+     * @return a set of keys of the form filename#sentencenum#linenum
+     * for sentences that contain the given tokens in the given index
      */
     public static HashSet<String> fetchFromIndex(Connection conn, String indexName,
                                                  ArrayList<String> tokens) {
 
         System.out.println("Searcher.fetchFromIndex(): " + indexName + "\n" + tokens);
-        HashSet<String> result = new HashSet<String>();
+        HashSet<String> result = new HashSet<>();
+        if (!indexName.equalsIgnoreCase("INDEX") && !indexName.equalsIgnoreCase("INDEX")) {
+            System.out.println("Error in Searcer.fetchFromIndex(): bad table name " + indexName);
+            return result;
+        }
         Statement stmt = null;
         try {
             for (String s : tokens) {
@@ -107,9 +114,12 @@ public class Searcher {
     }
 
     /***************************************************************
+     * @return a set of keys of the form filename#sentencenum#linenum
+     * for sentences that contain the given tokens in the two indexes
      */
     public static HashSet<String> fetchIndexes(Connection conn,
-                                               ArrayList<String> sentTokens, ArrayList<String> depTokens) {
+                                               ArrayList<String> sentTokens,
+                                               ArrayList<String> depTokens) {
 
         System.out.println("fetchIndexes():" + sentTokens + "\n" + depTokens);
         HashSet<String> result = new HashSet<String>();
@@ -123,6 +133,9 @@ public class Searcher {
     }
 
     /***************************************************************
+     * Convert the textual representation of a dependency parse
+     * to a list of tokens found in the dependency
+     * @return a list of string tokens
      */
     public static ArrayList<String> depToTokens(String dep) {
 
@@ -132,12 +145,14 @@ public class Searcher {
         CNF cnf = CNF.parseSimple(lex);
         for (Clause c : cnf.clauses) {
             for (Literal l : c.disjuncts) {
-                if (!Literal.isVariable(l.arg1))
-                    result.add(l.arg1);
-                if (!Literal.isVariable(l.arg2))
-                    result.add(l.arg2);
-                if (!Literal.isVariable(l.pred) && !Procedures.isProcPred(l.pred))
-                    result.add(l.pred);
+                if (!Procedures.isProcPred(l.pred)) {
+                    if (!Literal.isVariable(l.arg1))
+                        result.add(l.arg1);
+                    if (!Literal.isVariable(l.arg2))
+                        result.add(l.arg2);
+                    if (!Literal.isVariable(l.pred))
+                        result.add(l.pred);
+                }
             }
         }
         return result;
