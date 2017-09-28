@@ -37,6 +37,8 @@ August 9, Acapulco, Mexico.  See also http://github.com/ontologyportal
     out.println("<html>");
     out.println("  <head>");
     out.println("    <title>Sigma Knowledge Engineering Environment - Semantic Concordancer</title>");
+    out.println("    <link rel=\"stylesheet\" type=\"text/css\" href=\"brat/style-vis.css\" />");
+    out.println("    <script type=\"text/javascript\" src=\"brat/client/lib/head.load.min.js\"></script>");
     out.println("  </head>");
     out.println("  <body bgcolor=\"#FFFFFF\">");
 
