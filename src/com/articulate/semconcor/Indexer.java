@@ -5,6 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.sql.*;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -12,6 +13,7 @@ import java.util.regex.Pattern;
 
 import com.articulate.nlp.TFIDF;
 import com.articulate.nlp.corpora.OntoNotes;
+import com.articulate.nlp.corpora.CLCFCE;
 import com.articulate.nlp.pipeline.Pipeline;
 import com.articulate.nlp.pipeline.SentenceUtil;
 import com.articulate.nlp.semRewrite.CNF;
@@ -54,6 +56,8 @@ to start the server
 public class Indexer {
 
     public static final int tokensMax = 25;
+    //public static final String JDBCString = "jdbc:h2:~/corpora/transJudge";
+    public static final String JDBCString = "jdbc:h2:~/corpora/FCE";
 
     /****************************************************************
      */
@@ -236,7 +240,7 @@ public class Indexer {
             interp.initialize();
         }
         catch (Exception e) {
-            System.out.println("Error in Indexer.storeWikiText(): " + e.getMessage());
+            System.out.println("Error in Indexer.storeCorpusText(): " + e.getMessage());
             e.printStackTrace();
             return;
         }
@@ -255,6 +259,38 @@ public class Indexer {
                     }
                 }
             });
+        }
+        catch(Exception e) {
+            System.out.println(e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /****************************************************************
+     * @param docs Key is filename, value is a list of lines of text.
+     *            Sentences must not cross a line.
+     */
+    public static void storeDocCorpusText(Connection conn, HashMap<String,ArrayList<String>> docs) {
+
+        Interpreter interp = new Interpreter();
+        KBmanager.getMgr().initializeOnce();
+        try {
+            interp.initialize();
+        }
+        catch (Exception e) {
+            System.out.println("Error in Indexer.storeDocCorpusText(): " + e.getMessage());
+            e.printStackTrace();
+            return;
+        }
+        try {
+            for (String fname : docs.keySet()) {
+                ArrayList<String> doc = docs.get(fname);
+                System.out.println("Info in storeDocCorpusText(): processing file: " + fname);
+                for (int i = 0; i < doc.size(); i++) {
+                    String line = doc.get(i);
+                    extractOneAugmentLine(interp,conn,line,tokensMax,fname,i);
+                }
+            }
         }
         catch(Exception e) {
             System.out.println(e.getMessage());
@@ -331,48 +367,20 @@ public class Indexer {
 
     /***************************************************************
      */
-    public static void test() throws Exception {
-
-        Class.forName("org.h2.Driver");
-        Connection conn = DriverManager.getConnection("jdbc:h2:~/test", "sa", "");
-
-        Statement stmt = null;
-        String query = "select * from index";
-        try {
-            stmt = conn.createStatement();
-            ResultSet rs = stmt.executeQuery(query);
-            while (rs.next()) {
-                String token = rs.getString("TOKEN");
-                String filename = rs.getString("FILE");
-                int sentNum = rs.getInt("SENTNUM");
-                System.out.println(token + "\t" + filename + "\t" + sentNum);
-            }
-        }
-        catch (SQLException e ) {
-            System.out.println(e.getMessage());
-            e.printStackTrace();
-        }
-        finally {
-            if (stmt != null)
-                stmt.close();
-        }
-        conn.close();
-    }
-
-    /***************************************************************
-     */
     public static void main(String[] args) throws Exception {
 
         System.out.println("Semantic Concordancer Indexing - commands:");
         System.out.println("    -keep    - doesn't clear db");
         System.out.println();
         Class.forName("org.h2.Driver");
-        Connection conn = DriverManager.getConnection("jdbc:h2:~/test", "sa", "");
+        Connection conn = DriverManager.getConnection(JDBCString, "sa", "");
         if (args == null || (args != null && args.length > 0 && args[0] != "-keep")) {
             clearDB(conn);
             System.out.println("cleared db");
         }
-        storeCorpusText(conn);
+        //storeCorpusText(conn);
+        CLCFCE.readCorpus();
+        storeDocCorpusText(conn,CLCFCE.docs);
         conn.close();
     }
 }
