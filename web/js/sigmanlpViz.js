@@ -1,5 +1,5 @@
 var bratLocation = 'brat';
-head.load.min.js(
+head.js(
 // External libraries
 bratLocation + '/client/lib/jquery.min.js', bratLocation
 		+ '/client/lib/jquery.svg.min.js', bratLocation
