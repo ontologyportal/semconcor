@@ -14,6 +14,103 @@ import java.util.*;
 public class Searcher {
 
     /***************************************************************
+     * Add HTML markup highlighting the matching phrase
+     */
+    public static String highlightSent(String s, String phrase) {
+
+        int i = s.indexOf(phrase);
+        if (i == -1)
+            return s;
+        int start = i;
+        int end = i + phrase.length();
+        return s.substring(0,start) + "<b>" + s.substring(start,end) +
+                "</b>" + s.substring(end,s.length());
+    }
+
+
+    /***************************************************************
+     * Add HTML markup highlighting the matching dependency
+     */
+    public static String highlightDep(String s, String dep) {
+
+        return s;
+    }
+
+    /***************************************************************
+     * a testing method to help validate there's a connection to the
+     * intended DB
+     */
+    public static void stats(Connection conn) {
+
+        Statement stmt = null;
+        String result = null;
+        try {
+            stmt = conn.createStatement();
+            ResultSet res = stmt.executeQuery("SELECT COUNT(*) FROM INDEX");
+            int count = 0;
+            res.next();
+            count = res.getInt(1);
+            System.out.println("Number of rows in index: " + count);
+        }
+        catch (SQLException e) {
+            System.out.println(e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /***************************************************************
+     * @param key a  key of the form filename#sentencenum#linenum
+     */
+    public static String fetchSentenceFromKey(Connection conn, String key) {
+
+        Statement stmt = null;
+        String result = null;
+        try {
+            String[] sar = key.split("#");
+            String query = "select cont from content where file='" + sar[0] +
+                    "' and sentnum=" + sar[1] + " and linenum=" + sar[2] + ";";
+            System.out.println("Searcher.fetchSentenceFromKey(): query: " + query);
+            stmt = conn.createStatement();
+            ResultSet rs = stmt.executeQuery(query);
+            while (rs.next()) {
+                result = rs.getString("CONT");
+            }
+            return result;
+        }
+        catch (SQLException e) {
+            System.out.println(e.getMessage());
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    /***************************************************************
+     * @param key a  key of the form filename#sentencenum#linenum
+     */
+    public static String fetchDepFromKey(Connection conn, String key) {
+
+        Statement stmt = null;
+        String result = null;
+        try {
+            String[] sar = key.split("#");
+            String query = "select dependency from content where file='" + sar[0] +
+                    "' and sentnum=" + sar[1] + " and linenum=" + sar[2] + ";";
+            System.out.println("Searcher.fetchDepFromKey(): query: " + query);
+            stmt = conn.createStatement();
+            ResultSet rs = stmt.executeQuery(query);
+            while (rs.next()) {
+                result = rs.getString("DEPENDENCY");
+            }
+            return result;
+        }
+        catch (SQLException e) {
+            System.out.println(e.getMessage());
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    /***************************************************************
      * @param keys a set of keys of the form filename#sentencenum#linenum
      */
     public static void fetchResultStrings(Connection conn, HashSet<String> keys,
@@ -26,6 +123,7 @@ public class Searcher {
                 String[] sar = s.split("#");
                 String query = "select cont,dependency from content where file='" + sar[0] +
                         "' and sentnum=" + sar[1] + " and linenum=" + sar[2] + ";";
+                System.out.println("Searcher.fetchResultStrings(): query: " + query);
                 stmt = conn.createStatement();
                 ResultSet rs = stmt.executeQuery(query);
                 while (rs.next()) {
@@ -34,7 +132,7 @@ public class Searcher {
                 }
             }
         }
-        catch (SQLException e ) {
+        catch (SQLException e) {
             System.out.println(e.getMessage());
             e.printStackTrace();
         }
@@ -49,8 +147,8 @@ public class Searcher {
 
         System.out.println("Searcher.fetchFromIndex(): " + indexName + "\n" + tokens);
         HashSet<String> result = new HashSet<>();
-        if (!indexName.equalsIgnoreCase("INDEX") && !indexName.equalsIgnoreCase("INDEX")) {
-            System.out.println("Error in Searcer.fetchFromIndex(): bad table name " + indexName);
+        if (!indexName.equalsIgnoreCase("INDEX") && !indexName.equalsIgnoreCase("DEPINDEX")) {
+            System.out.println("Error in Searcher.fetchFromIndex(): bad table name " + indexName);
             return result;
         }
         Statement stmt = null;
@@ -71,14 +169,36 @@ public class Searcher {
                     result.addAll(newresult);
                 else
                     result.retainAll(newresult);
+                System.out.println("Searcher.fetchFromIndex(): result size: " + result.size());
             }
         }
-        catch (SQLException e ) {
+        catch (SQLException e) {
             System.out.println(e.getMessage());
             e.printStackTrace();
         }
-        System.out.println("Searcher.fetchFromIndex(): result: " + result);
+        System.out.println("Searcher.fetchFromIndex(): result size: " + result.size());
         return result;
+    }
+
+    /***************************************************************
+     * Note that dependency patterns must be simple CNF - no disjuncts
+     * and only positive literals
+     * @param smallcnf the dependency pattern to search for.
+     * @param onedep the dependency match candidate
+     */
+    public static boolean matchDep(CNF smallcnf, String onedep) {
+
+        System.out.println("Searcher.matchDep(): onedep: " + onedep);
+        onedep = StringUtil.removeEnclosingCharPair(onedep,2,'[',']'); // two layers of brackets
+        Lexer lex = new Lexer(onedep);
+        CNF depcnf = CNF.parseSimple(lex);
+        HashMap<String,String> bindings = smallcnf.unify(depcnf);
+        if (bindings == null)  // remove all that don't unify
+            return false;
+        else {
+            System.out.println("Searcher.matchDep(): " + bindings);
+            return true;
+        }
     }
 
     /***************************************************************
@@ -88,27 +208,45 @@ public class Searcher {
      * with the search dependency form
      * @param dep the dependency pattern to search for.
      * @param dependencies the dependency parses of sentences to check for a match
-     * @return a list of indexes to items that don't match the pattern
+     * @return a list of integer indexes to items that don't match the pattern
      */
     public static ArrayList<Integer> matchDependencies(String dep,
-                                    ArrayList<String> dependencies) {
+                                     ArrayList<String> dependencies) {
 
-        System.out.println("Searcher.matchDependencies(): " + dep + "\n" + dependencies);
+        System.out.println("Searcher.matchDependencies(): " + dep);
+        System.out.println("dependencies size: " + dependencies.size());
         ArrayList<Integer> result = new ArrayList<Integer>();
-        if (Strings.isNullOrEmpty(dep))
+        if (Strings.isNullOrEmpty(dep) || dep.equals("null"))
             return result;
         Lexer lex = new Lexer(dep);
         CNF smallcnf = CNF.parseSimple(lex);
         for (int i = 0; i < dependencies.size(); i++) {
             String onedep = dependencies.get(i);
-            onedep = StringUtil.removeEnclosingCharPair(onedep,2,'[',']'); // two layers of brackets
-            lex = new Lexer(onedep);
-            CNF depcnf = CNF.parseSimple(lex);
-            HashMap<String,String> bindings = smallcnf.unify(depcnf);
-            if (bindings == null)  // remove all that don't unify
+            if (!matchDep(smallcnf,onedep))
                 result.add(i);
-            else
-                System.out.println("Searcher.matchDependencies(): " + bindings);
+        }
+        return result;
+    }
+
+    /***************************************************************
+     * returns the indices of all the dependency forms that don't unify
+     * with the search dependency form
+     * @param phrase the word or phrase to search for.
+     * @param sentences the sentences to check for a match
+     * @return a list of integer indexes to items that don't match
+     */
+    public static ArrayList<Integer> matchSentences(String phrase,
+                                     ArrayList<String> sentences) {
+
+        System.out.println("Searcher.matchSentences(): " + phrase);
+        System.out.println("sentences size: " + sentences.size());
+        ArrayList<Integer> result = new ArrayList<Integer>();
+        if (Strings.isNullOrEmpty(phrase))
+            return result;
+        for (int i = 0; i < sentences.size(); i++) {
+            String onesent = sentences.get(i);
+            if (!onesent.contains(phrase))
+                result.add(i);
         }
         return result;
     }
@@ -141,6 +279,8 @@ public class Searcher {
 
         System.out.println("Searcher.depToTokens(): " + dep);
         ArrayList<String> result = new ArrayList<String>();
+        if (dep == null)
+            return result;
         Lexer lex = new Lexer(dep);
         CNF cnf = CNF.parseSimple(lex);
         for (Clause c : cnf.clauses) {
@@ -160,7 +300,9 @@ public class Searcher {
 
     /***************************************************************
      */
-    public static void search(String phrase, String dep) throws Exception {
+    public static void search(String phrase, String dep,
+                              ArrayList<String> sentences,
+                              ArrayList<String> dependencies) throws Exception {
 
         System.out.println("Searcher.search(): " + phrase + "\n" + dep);
         String searchString = phrase;
@@ -172,32 +314,31 @@ public class Searcher {
         depTokens = depToTokens(dep);
 
         Class.forName("org.h2.Driver");
-        Connection conn = DriverManager.getConnection("jdbc:h2:~/test", "sa", "");
-
+        Connection conn = DriverManager.getConnection(Indexer.JDBCString, "sa", "");
+        System.out.println("main(): Opened DB " + Indexer.JDBCString);
+        stats(conn);
         Statement stmt = null;
         HashSet<String> result = new HashSet<>();
         try {
             result = fetchIndexes(conn,sentTokens, depTokens);
-            System.out.println("search(): indexes: " + result);
-            ArrayList<String> sentences = new ArrayList<>();
-            ArrayList<String> dependencies = new ArrayList<>();
-            fetchResultStrings(conn,result,sentences,dependencies);
+            System.out.println("search(): indexes size: " + result.size());
+            ArrayList<String> tempSentences = new ArrayList<>();
+            ArrayList<String> tempDependencies = new ArrayList<>();
+            fetchResultStrings(conn,result,tempSentences,tempDependencies);
 
-            ArrayList<Integer> removeList = matchDependencies(dep,dependencies);
+            ArrayList<Integer> removeList = matchDependencies(dep,tempDependencies);
+            removeList.addAll(matchSentences(phrase,tempSentences));
+
             ArrayList<String> newsent = new ArrayList<>();
             ArrayList<String> newdep = new ArrayList<>();
-            for (int i = 0; i < dependencies.size(); i++) {
+            for (int i = 0; i < tempDependencies.size(); i++) {
                 if (!removeList.contains(i)) {
-                    newsent.add(sentences.get(i));
-                    newdep.add(dependencies.get(i));
+                    newsent.add(tempSentences.get(i));
+                    newdep.add(tempDependencies.get(i));
                 }
             }
-            for (int i = 0; i < newsent.size(); i++) {
-                String s = newsent.get(i);
-                String d = newdep.get(i);
-                System.out.println("Sentence: " + s);
-                System.out.println("Dependency: " + d);
-            }
+            sentences.addAll(newsent);
+            dependencies.addAll(newdep);
         }
         catch (Exception e) {
             System.out.println(e.getMessage());
@@ -208,6 +349,29 @@ public class Searcher {
                 stmt.close();
         }
         conn.close();
+    }
+
+    /***************************************************************
+     */
+    public static void printSearchResults(String phrase, String dep) throws Exception {
+
+        System.out.println("Searcher.printSearchResults(): " + phrase + "\n" + dep);
+
+        try {
+            ArrayList<String> sentences = new ArrayList<>();
+            ArrayList<String> dependencies = new ArrayList<>();
+            search(phrase, dep,sentences, dependencies);
+            for (int i = 0; i < sentences.size(); i++) {
+                String s = sentences.get(i);
+                String d = dependencies.get(i);
+                System.out.println("Sentence: " + s);
+                System.out.println("Dependency: " + d);
+            }
+        }
+        catch (Exception e) {
+            System.out.println(e.getMessage());
+            e.printStackTrace();
+        }
     }
 
     /** ***************************************************************
@@ -223,7 +387,7 @@ public class Searcher {
             interp.initialize();
         }
         catch (Exception e) {
-            System.out.println("Error in Indexer.storeWikiText(): " + e.getMessage());
+            System.out.println("Error in Searcher.interactive(): " + e.getMessage());
             e.printStackTrace();
             return;
         }
@@ -240,7 +404,7 @@ public class Searcher {
             if (!Strings.isNullOrEmpty(input) || !Strings.isNullOrEmpty(deps)) {
                 if (Strings.isNullOrEmpty(input) || (!input.equals("exit") && !input.equals("quit"))) {
                     try {
-                        search(input, deps);
+                        printSearchResults(input, deps);
                     }
                     catch (Exception e) {
                         System.out.println(e.getMessage());
@@ -259,11 +423,13 @@ public class Searcher {
     public static void main(String[] args) throws Exception {
 
         Class.forName("org.h2.Driver");
-        Connection conn = DriverManager.getConnection("jdbc:h2:~/test", "sa", "");
-        String searchString = "in";
-        if (args != null && args.length > 0 && args[0].equals("-i"))
+        if (args != null && args.length > 0 && args[0].equals("-i")) {
             interactive();
+        }
         else {
+            Connection conn = DriverManager.getConnection(Indexer.JDBCString, "sa", "");
+            System.out.println("main(): Opened DB " + Indexer.JDBCString);
+            String searchString = "in";
             Interpreter interp = new Interpreter();
             KBmanager.getMgr().initializeOnce();
             try {
@@ -279,8 +445,7 @@ public class Searcher {
             String depString = "sumo(Process,?X)";
             if (args != null && args.length > 1)
                 depString = args[1];
-            search(searchString,depString);
+            printSearchResults(searchString,depString);
         }
-
     }
 }
