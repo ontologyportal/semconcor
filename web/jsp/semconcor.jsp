@@ -103,14 +103,13 @@ August 9, Acapulco, Mexico.  See also http://github.com/ontologyportal
             String s = sentences.get(i);
             if (!printed.contains(s)) {
                 String highlightSent = Searcher.highlightSent(s,theText);
-                out.println(highlightSent + "<br>");
+                out.println(highlightSent + "<p>");
                 String d = dependencies.get(i);
-                d = Searcher.highlightDep(d,dep);
+                d = Searcher.highlightDep(dep,d); // dep is the pattern, d is the full dependency
                 out.println("<font size=-1 style=bold face=courier>");
                 out.println(d);
                 out.println("</font><P>");
                 if (depGraph != null && depGraph.equals("checked")) {
-                    out.println("<h2>Visualization</h2>\n");
                     out.println("<div id=\"bratVizDiv\" style=\"\"></div><P>\n");
                     //Get data in brat format
                     BratAnnotationUtil bratAnnotationUtil = new BratAnnotationUtil();
@@ -119,6 +118,7 @@ August 9, Acapulco, Mexico.  See also http://github.com/ontologyportal
                     //Brat integration script
                     out.println("<script type=\"text/javascript\" src=\"js/sigmanlpViz.js\"></script>");
                 }
+                out.println("<hr>\n");
                 printed.add(s);
             }
         }
