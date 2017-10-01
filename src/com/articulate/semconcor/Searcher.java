@@ -8,9 +8,26 @@ import com.google.common.base.Strings;
 import java.sql.*;
 import java.util.*;
 
-/**
- * Created by apease on 9/12/17.
- */
+/*
+Copyright 2017 Articulate software
+
+Author: Adam Pease apease@articulatesoftware.com
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program ; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place, Suite 330, Boston,
+MA  02111-1307 USA
+*/
 public class Searcher {
 
     /***************************************************************
@@ -27,13 +44,39 @@ public class Searcher {
                 "</b>" + s.substring(end,s.length());
     }
 
-
     /***************************************************************
-     * Add HTML markup highlighting the matching dependency
+     * Add HTML markup highlighting the matching dependency.  Iterate
+     * through the clauses, highlighting each bound clause.
+     * @return a String with HTML boldface of the bound clauses
      */
-    public static String highlightDep(String s, String dep) {
+    public static String highlightDep(String pattern, String depParse) {
 
-        return s;
+        System.out.println("Searcher.highlightDep(): pattern: " + pattern + "\ndepParse: " + depParse);
+        if (StringUtil.emptyString(pattern))
+            return depParse;
+        Lexer lex = new Lexer(StringUtil.removeEnclosingCharPair(pattern,1,'[',']'));
+        CNF patcnf = CNF.parseSimple(lex);
+
+        lex = new Lexer(StringUtil.removeEnclosingCharPair(depParse,1,'[',']'));
+        CNF depcnf = CNF.parseSimple(lex);
+        HashMap<String,String> bindings = patcnf.unify(depcnf);
+
+        System.out.println("Searcher.highlightDep(): bindings: " + bindings);
+        System.out.println("Searcher.highlightDep(): cnf: " + depcnf);
+        StringBuffer result = new StringBuffer();
+        for (Clause c : depcnf.clauses) {
+            for (Literal l : c.disjuncts) {
+                if (result.length() > 0)
+                    result.append(", ");
+                if (l.bound) {
+                    result.append("<b>" + l.toString().substring(1) + "</b>"); // don't print the 'X' bound flag
+                }
+                else {
+                    result.append(l);
+                }
+            }
+        }
+        return result.toString();
     }
 
     /***************************************************************

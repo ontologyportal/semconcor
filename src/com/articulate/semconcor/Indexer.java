@@ -16,9 +16,7 @@ import com.articulate.nlp.corpora.OntoNotes;
 import com.articulate.nlp.corpora.CLCFCE;
 import com.articulate.nlp.pipeline.Pipeline;
 import com.articulate.nlp.pipeline.SentenceUtil;
-import com.articulate.nlp.semRewrite.CNF;
-import com.articulate.nlp.semRewrite.Interpreter;
-import com.articulate.nlp.semRewrite.Literal;
+import com.articulate.nlp.semRewrite.*;
 import com.articulate.sigma.KBmanager;
 import edu.stanford.nlp.ling.CoreAnnotations;
 import edu.stanford.nlp.ling.CoreLabel;
@@ -73,6 +71,31 @@ public class Indexer {
 
         String last = tokens.get(tokens.size()-1).originalText();
         return (last.equals(".") || last.equals("!"));
+    }
+
+    /****************************************************************
+     * remove literals with tokens that don't have a token number
+     */
+    private static String revertAnnotations (String dep) {
+
+        StringBuffer result = new StringBuffer();
+        System.out.println("Searcher.depToTokens(): " + dep);
+        if (dep == null)
+            return null;
+        Lexer lex = new Lexer(dep);
+        CNF cnf = CNF.parseSimple(lex);
+        for (Clause c : cnf.clauses) {
+            for (Literal l : c.disjuncts) {
+                if (!Procedures.isProcPred(l.pred)) {
+                    if (Literal.tokenNum(l.arg1) != -1 && Literal.tokenNum(l.arg2) != -1) {
+                        if (result.toString() == "")
+                            result.append(",");
+                        result.append(l.toString());
+                    }
+                }
+            }
+        }
+        return result.toString();
     }
 
     /****************************************************************
