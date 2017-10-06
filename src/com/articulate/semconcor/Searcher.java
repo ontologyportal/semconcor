@@ -1,6 +1,7 @@
 package com.articulate.semconcor;
 
 import com.articulate.nlp.semRewrite.*;
+import com.articulate.sigma.AVPair;
 import com.articulate.sigma.KBmanager;
 import com.articulate.sigma.StringUtil;
 import com.google.common.base.Strings;
@@ -182,6 +183,86 @@ public class Searcher {
     }
 
     /***************************************************************
+     * note that since AVPair takes strings, the numerical counts
+     * must be padded with 0's to maintain their order.  Use 10 digits
+     * so we can handle billions of terms.
+     */
+    public static TreeSet<AVPair> makeCountIndex(Connection conn,
+                                                 ArrayList<String> tokens) {
+
+        TreeSet<AVPair> countIndex = new TreeSet<AVPair>();
+        Statement stmt = null;
+        try {
+            for (String s : tokens) {
+                String query = "select * from counts where token='" + s + "';";
+                System.out.println("Searcher.fetchFromIndex(): query: " + query);
+                stmt = conn.createStatement();
+                ResultSet rs = stmt.executeQuery(query);
+                while (rs.next()) {
+                    int count = rs.getInt("COUNT");
+                    String countString = Integer.toString(count);
+                    countString = StringUtil.fillString(countString,'0',10,true);
+                    AVPair avp = new AVPair(countString,s);
+                    countIndex.add(avp);
+                }
+            }
+        }
+        catch (SQLException e) {
+            System.out.println(e.getMessage());
+            e.printStackTrace();
+        }
+        return countIndex;
+    }
+
+    /***************************************************************
+     * @return a set of keys of the form filename#sentencenum#linenum
+     * for sentences that contain the given tokens in the given index
+     */
+    public static HashSet<String> fetchFromSortedIndex(Connection conn, String indexName,
+                                                 ArrayList<String> tokens) {
+
+        TreeSet<AVPair> sortedCounts = makeCountIndex(conn,tokens);
+
+        System.out.println("Searcher.fetchFromSortedIndex(): " + indexName + "\n" + tokens);
+        System.out.println("Searcher.fetchFromSortedIndex(): sorted counts: " + sortedCounts);
+        HashSet<String> result = new HashSet<>();
+        if (!indexName.equalsIgnoreCase("INDEX") && !indexName.equalsIgnoreCase("DEPINDEX")) {
+            System.out.println("Error in Searcher.fetchFromSortedIndex(): bad table name " + indexName);
+            return result;
+        }
+        Statement stmt = null;
+        try {
+            for (AVPair avp : sortedCounts) {
+                String s = avp.value;
+                System.out.println("Searcher.fetchFromSortedIndex(): term count: " + avp.attribute);
+                String query = "select * from " + indexName + " where token='" + s + "';";
+                System.out.println("Searcher.fetchFromSortedIndex(): query: " + query);
+                stmt = conn.createStatement();
+                ResultSet rs = stmt.executeQuery(query);
+                HashSet<String> newresult = new HashSet<>();
+                while (rs.next()) {
+                    String filename = rs.getString("FILE");
+                    int sentNum = rs.getInt("SENTNUM");
+                    int lineNum = rs.getInt("LINENUM");
+                    newresult.add(filename + "#" + Integer.toString(sentNum) + "#" + Integer.toString(lineNum));
+                }
+                if (result.isEmpty())
+                    result.addAll(newresult);
+                else
+                    result.retainAll(newresult);
+                System.out.println("Searcher.fetchFromSortedIndex(): result size: " + result.size());
+            }
+        }
+        catch (SQLException e) {
+            System.out.println(e.getMessage());
+            e.printStackTrace();
+        }
+        System.out.println("Searcher.fetchFromSortedIndex(): result size: " + result.size());
+        System.out.println("Searcher.fetchFromSortedIndex(): result: " + result);
+        return result;
+    }
+
+    /***************************************************************
      * @return a set of keys of the form filename#sentencenum#linenum
      * for sentences that contain the given tokens in the given index
      */
@@ -305,11 +386,11 @@ public class Searcher {
         System.out.println("fetchIndexes():" + sentTokens + "\n" + depTokens);
         HashSet<String> result = new HashSet<String>();
         if (sentTokens != null && sentTokens.size() > 0)
-            result = fetchFromIndex(conn,"index",sentTokens);
+            result = fetchFromSortedIndex(conn,"index",sentTokens);
         if (result.size() == 0)
-            result = fetchFromIndex(conn,"depindex",depTokens);
-        if (depTokens != null && depTokens.size() > 0)
-            result.retainAll(fetchFromIndex(conn,"depindex",depTokens));
+            result = fetchFromSortedIndex(conn,"depindex",depTokens);
+        else if (depTokens != null && depTokens.size() > 0)
+            result.retainAll(fetchFromSortedIndex(conn,"depindex",depTokens));
         return result;
     }
 
@@ -367,7 +448,7 @@ public class Searcher {
             System.out.println("search(): indexes size: " + result.size());
             ArrayList<String> tempSentences = new ArrayList<>();
             ArrayList<String> tempDependencies = new ArrayList<>();
-            fetchResultStrings(conn,result,tempSentences,tempDependencies);
+            fetchResultStrings(conn,result,tempSentences,tempDependencies); // results returned in tempSentences and tempDependencies
 
             ArrayList<Integer> removeList = matchDependencies(dep,tempDependencies);
             removeList.addAll(matchSentences(phrase,tempSentences));
