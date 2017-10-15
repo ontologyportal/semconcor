@@ -53,8 +53,16 @@ java -Xmx2G -cp /home/apease/workspace/semconcor/build/classes:
   /home/apease/workspace/semconcor/build/lib/*:
   /home/apease/workspace/sigmanlp/build/lib/* com.articulate.semconcor.Indexer
 
-Finally, you can run the concordancer
+Finally, you can run the concordancer on the command line
 
 java -Xmx2G -cp /home/apease/workspace/semconcor/build/classes:
   /home/apease/workspace/semconcor/build/lib/*:
   /home/apease/workspace/sigmanlp/build/lib/* com.articulate.semconcor.Searcher -i
+
+or start it up in tomcat
+
+$CATALINA_HOME/bin/startup.sh
+
+and point your browser at
+
+localhost:8080/semconcor/semconcor.jsp
