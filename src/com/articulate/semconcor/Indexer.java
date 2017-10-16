@@ -56,6 +56,7 @@ public class Indexer {
     public static final int tokensMax = 25;
     //public static final String JDBCString = "jdbc:h2:~/corpora/transJudge";
     public static final String JDBCString = "jdbc:h2:~/corpora/FCE";
+    public static String UserName = "";
 
     /****************************************************************
      */
@@ -396,7 +397,7 @@ public class Indexer {
         System.out.println("    -keep    - doesn't clear db");
         System.out.println();
         Class.forName("org.h2.Driver");
-        Connection conn = DriverManager.getConnection(JDBCString, "sa", "");
+        Connection conn = DriverManager.getConnection(JDBCString, UserName, "");
         if (args == null || (args != null && args.length > 0 && args[0] != "-keep")) {
             clearDB(conn);
             System.out.println("cleared db");

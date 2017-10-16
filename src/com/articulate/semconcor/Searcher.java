@@ -438,7 +438,7 @@ public class Searcher {
         depTokens = depToTokens(dep);
 
         Class.forName("org.h2.Driver");
-        Connection conn = DriverManager.getConnection(Indexer.JDBCString, "sa", "");
+        Connection conn = DriverManager.getConnection(Indexer.JDBCString, Indexer.UserName, "");
         System.out.println("main(): Opened DB " + Indexer.JDBCString);
         stats(conn);
         Statement stmt = null;
@@ -551,7 +551,7 @@ public class Searcher {
             interactive();
         }
         else {
-            Connection conn = DriverManager.getConnection(Indexer.JDBCString, "sa", "");
+            Connection conn = DriverManager.getConnection(Indexer.JDBCString, Indexer.UserName, "");
             System.out.println("main(): Opened DB " + Indexer.JDBCString);
             String searchString = "in";
             Interpreter interp = new Interpreter();

@@ -47,6 +47,10 @@ First create the empty database
 
 java -cp ~/Programs/h2/bin/h2*.jar org.h2.tools.RunScript -url jdbc:h2:~/corpora/FCE -script ~/workspace/semconcor/script.sql
 
+start the DB engine
+
+java -jar ~/Programs/h2/bin/h2*.jar &
+
 Then run the indexer
 
 java -Xmx2G -cp /home/apease/workspace/semconcor/build/classes:
