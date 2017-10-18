@@ -114,7 +114,8 @@ August 9, Acapulco, Mexico.  See also http://github.com/ontologyportal
                     //Get data in brat format
                     BratAnnotationUtil bratAnnotationUtil = new BratAnnotationUtil();
                     out.println("<script type=\"text/javascript\">");
-                    out.println("var docData=" + bratAnnotationUtil.getBratAnnotations(dependencies) + ";</script>");
+                    ArrayList<String> literals = Literal.stringToLiteralList(dependencies.get(i));
+                    out.println("var docData=" + bratAnnotationUtil.getBratAnnotations(literals) + ";</script>");
                     //Brat integration script
                     out.println("<script type=\"text/javascript\" src=\"js/sigmanlpViz.js\"></script>");
                 }
