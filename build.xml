@@ -5,22 +5,25 @@
     <property name="compiler.debug" value="on"/>
     <property name="build.home" value="build"/>
     <property name="app.name" value="semconcor"/>
-    <property name="sigmakee.home" value="${env.SIGMA_SRC}" />
-    <property name="sigmanlp.home" value="${env.SIGMA_SRC}/../sigmanlp" />
-    <property name="tomcat.home" value="${env.CATALINA_HOME}"/>
-    <echo message="SIGMA_HOME is set to = ${env.SIGMA_HOME}"/>
-    <echo message="sigmakee is set to = ${env.SIGMA_SRC}"/>
-    <echo message="basedir is set to = ${basedir}"/>
+    <property name="sigmakee.home" location="${env.SIGMA_SRC}" />
+    <property name="sigmakee.lib" location="${env.SIGMA_SRC}/lib" />
+    <property name="sigmanlp.home" location="${env.SIGMA_SRC}/../sigmanlp" />
+    <property name="sigmanlp.lib" location="${env.SIGMA_SRC}/../sigmanlp/lib" />
+    <property name="tomcat.home" location="${env.CATALINA_HOME}"/>
+    <echo message="in semconcor SIGMA_HOME is set to = ${env.SIGMA_HOME}"/>
+    <echo message="in semconcor sigmakee is set to = ${env.SIGMA_SRC}"/>
+    <echo message="in semconcor basedir is set to = ${basedir}"/>
     <echo>sigmakee home: ${sigmakee.home}</echo>
 
-    <property name="deploy.home" value="${tomcat.home}/webapps/${app.name}"/>
-    <property name="build.classes" value="${basedir}/build/classes"/>
-    <property name="build.lib" value="${basedir}/build/lib"/>
-    <property name="deploy.classes" value="${deploy.home}/WEB-INF/classes"/>
-    <property name="deploy.lib" value="${deploy.home}/WEB-INF/lib"/>
-    <property name="dist.home" value="${tomcat.home}/webapps"/>
-    <property name="dist.war" value="semconcor.war"/>
+    <property name="deploy.home" location="${tomcat.home}/webapps/${app.name}"/>
+    <property name="build.classes" location="${basedir}/build/classes"/>
+    <property name="build.lib" location="${basedir}/build/lib"/>
+    <property name="deploy.classes" location="${deploy.home}/WEB-INF/classes"/>
+    <property name="deploy.lib" location="${deploy.home}/WEB-INF/lib"/>
+    <property name="dist.home" location="${tomcat.home}/webapps"/>
+    <property name="dist.war" location="semconcor.war"/>
 
+    <echoproperties/>
     <ant antfile="../sigmakee/build.xml" inheritAll="false" target="all" />
     <ant antfile="../sigmanlp/build.xml" inheritAll="false" target="all" />
     <copy todir="${basedir}/lib" file="${sigmakee.home}/build/sigmakee.jar" />
@@ -33,12 +36,6 @@
         <include name="*.jar"/>
     </fileset>
 </path>
-  
-<path id="compile.classpath">
-    <fileset dir="${basedir}/lib">
-        <include name="*.jar"/>
-    </fileset>
-</path>
 
 <path id="sourcepath">
     <dirset dir="${basedir}">
@@ -47,9 +44,22 @@
 </path>
 
 <target name="compile" depends="init" description="Compile semconcor">
+    <echo message="in semconcor sigmakee is set to = ${env.SIGMA_SRC}"/>
+    <echo message="in semconcor compile.classpath is set to = ${compile.classpath}"/>
     <mkdir dir="${build.classes}"/>
-    <javac destdir="${build.classes}" debug="on" optimize="on" deprecation="on" classpathref="compile.classpath" fork="true">
-      <src refid="sourcepath"/>
+    <javac destdir="${build.classes}" debug="on" optimize="on" deprecation="on" fork="true">
+        <classpath>
+            <fileset dir="${basedir}/lib">
+                <include name="*.jar"/>
+            </fileset>
+            <fileset dir="${sigmakee.lib}">
+                <include name="*.jar"/>
+            </fileset>
+            <fileset dir="${sigmanlp.lib}">
+                <include name="*.jar"/>
+            </fileset>
+        </classpath>
+        <src refid="sourcepath"/>
     </javac>
     
     <copy todir="${build.classes}">
